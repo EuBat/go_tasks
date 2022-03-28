@@ -10,7 +10,7 @@ import (
 func main() {
 	// local message
 	//lister - серверный сокет
-	listener, err := net.Listen("tcp4", "10.9.38.106:1027")
+	listener, err := net.Listen("tcp4", "192.168.1.62:1027")
 	if err != nil {
 		log.Fatal(err)
 	}
