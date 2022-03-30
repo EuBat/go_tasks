@@ -5,12 +5,13 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
-// как сделать переменные сеттеров cosnt
-// как сделать геттеры const функцией
+// сделать переменные сеттеров cosnt
+// сделать геттеры const функцией
 // где деструктор :(
-// конструктора нет. деструктура тоже нет.
+// конструктора нет. деструктура видимо тоже нет.
 var wg sync.WaitGroup
 
 type Client struct {
@@ -27,25 +28,29 @@ func (c *Client) GetMsg() string {
 
 	msg := make([]byte, 80)
 
-	_, err := c.Connection.Read(msg)
+	go c.Connection.Read(msg)
 
-	if err != nil {
-		log.Fatal(err)
+	if string(msg) == "bye" {
+		c.Connection.Close()
 	}
-
 	fmt.Println(string(msg))
 	return string(msg)
 }
 
+func (c *Client) SetTimeout(second time.Duration) {
+	timeout := time.Now().Add(second + time.Second)
+	c.Connection.SetReadDeadline(timeout)
+}
 func (c *Client) Connect(server net.Listener) {
 	var err error
 	c.Connection, err = server.Accept()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer c.Connection.Close()
+	//c.SetTimeout(time.Second)
 	c.SendMsg("Hi Eugen")
-	//timeout := time.Now().Add(time.Second)
-	//c.Connection.SetReadDeadline(timeout)
+	c.GetMsg()
 	fmt.Println("\nConnection #", c.Connection)
 }
 
@@ -56,7 +61,7 @@ func (c *Client) ConnectClose() {
 
 func main() {
 	//lister - серверный сокет
-	listener, err := net.Listen("tcp4", "172.20.10.2:1027")
+	listener, err := net.Listen("tcp4", "192.168.0.105:1027")
 	if err != nil {
 		log.Fatal(err)
 		fmt.Println("error", err)
