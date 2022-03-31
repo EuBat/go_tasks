@@ -35,16 +35,19 @@ func main() {
 	fmt.Println(listener)
 	fmt.Println("ok")
 
-	connection := make([]net.Conn, 5)
+	connection := make([]net.Conn, 0)
 	for {
 		client, err := listener.Accept()
 		if err != nil {
+			fmt.Println("Ошибочка вышла")
 			log.Fatal(err)
 		}
 		connection = append(connection, client)
+		fmt.Println("\namount connection ", len(connection))
 		go Handler(client)
-		for i := 0; i < len(connection); i++ {
-			connection[i].Write([]byte("new client #" + string(ClientCount)))
+		for i := 0; i < len(connection)-1; i++ {
+			fmt.Println("\n i =", i)
+			connection[i].Write([]byte("\nnew client #" + string(ClientCount)))
 		}
 	}
 
