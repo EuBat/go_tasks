@@ -5,70 +5,24 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"sync"
-	"time"
 )
 
-// сделать переменные сеттеров cosnt
-// сделать геттеры const функцией
-// где деструктор :(
-// конструктора нет. деструктура видимо тоже нет.
-var wg sync.WaitGroup
 var ClientCount int = 0
 
-type Client struct {
-	Connection net.Conn
-	status     bool
-	id         int
-}
-
-func (c *Client) SendMsg(message string) {
-	msg := []byte(message)
-	c.Connection.Write(msg)
-}
-
-func (c *Client) GetMsg() string {
-
-	msg := make([]byte, 80)
-
-	go c.Connection.Read(msg)
-
-	if string(msg) == "bye" {
-		c.Connection.Close()
-	}
-	fmt.Println(string(msg))
-	return string(msg)
-}
-
-func (c *Client) SetTimeout(second time.Duration) {
-	timeout := time.Now().Add(second + time.Second)
-	c.Connection.SetReadDeadline(timeout)
-}
-func (c *Client) Connect(server net.Listener) {
-	var err error
-	c.Connection, err = server.Accept()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer c.Connection.Close()
-
+func Handler(connection net.Conn) {
+	defer connection.Close()
+	fmt.Println("\nConnection #", connection)
 	ClientCount++
-	c.id = ClientCount
-	c.status = true
-
+	connection.Write([]byte("\nHi! You are #" + strconv.Itoa(ClientCount)))
+	msg := make([]byte, 80)
 	for {
-		c.SendMsg("/nHi! You are #" + strconv.Itoa(c.id))
+		_, err := connection.Read(msg)
+		if err != nil {
+			break
+		}
+		fmt.Println(string(msg))
 	}
-	//c.SetTimeout(time.Second)
-	//c.GetMsg()
-	fmt.Println("\nConnection #", c.Connection)
-}
 
-func (c *Client) ConnectClose() {
-	c.SendMsg("bye-bye")
-	c.Connection.Close()
-	c.status = false
-	ClientCount--
 }
 
 func main() {
@@ -81,25 +35,17 @@ func main() {
 	fmt.Println(listener)
 	fmt.Println("ok")
 
-	clients := make([]Client, 10)
+	connection := make([]net.Conn, 5)
+	for {
+		client, err := listener.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		connection = append(connection, client)
+		go Handler(client)
+		for i := 0; i < len(connection); i++ {
+			connection[i].Write([]byte("new client #" + string(ClientCount)))
+		}
+	}
 
-	wg.Add(5)
-	go clients[0].Connect(listener)
-	go clients[1].Connect(listener)
-	go clients[2].Connect(listener)
-	go clients[3].Connect(listener)
-	go clients[4].Connect(listener)
-
-	// for i := range clients {
-	// 	fmt.Println("/n#G:", i)
-	// 	fmt.Println("/n#:", clients[i].Connection)
-	// 	defer wg.Done()
-	// }
-
-	// for i := range clients {
-	// 	go clients[i].SendMsg("bye-bye")
-	// 	go clients[i].ConnectClose()
-	// }
-
-	wg.Wait()
 }
