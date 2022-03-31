@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -13,10 +14,12 @@ import (
 // где деструктор :(
 // конструктора нет. деструктура видимо тоже нет.
 var wg sync.WaitGroup
+var ClientCount int = 0
 
 type Client struct {
 	Connection net.Conn
 	status     bool
+	id         int
 }
 
 func (c *Client) SendMsg(message string) {
@@ -48,15 +51,24 @@ func (c *Client) Connect(server net.Listener) {
 		log.Fatal(err)
 	}
 	defer c.Connection.Close()
+
+	ClientCount++
+	c.id = ClientCount
+	c.status = true
+
+	for {
+		c.SendMsg("/nHi! You are #" + strconv.Itoa(c.id))
+	}
 	//c.SetTimeout(time.Second)
-	c.SendMsg("Hi Eugen")
-	c.GetMsg()
+	//c.GetMsg()
 	fmt.Println("\nConnection #", c.Connection)
 }
 
 func (c *Client) ConnectClose() {
-	c.Connection.Close()
 	c.SendMsg("bye-bye")
+	c.Connection.Close()
+	c.status = false
+	ClientCount--
 }
 
 func main() {
