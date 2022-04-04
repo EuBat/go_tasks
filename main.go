@@ -17,6 +17,7 @@ type client struct {
 var (
 	clientCount int = 0
 	entering        = make(chan client)
+	exit            = make(chan client)
 	message         = make(chan string)
 )
 
@@ -29,27 +30,34 @@ func clientWriter(c client) {
 
 // чтение из консоли исходящих сообщений
 func clientReader(c client) {
-	msg := make([]byte, 80)
+	msg := make([]byte, 4)
 	for {
 		_, err := c.connection.Read(msg)
 		if err != nil {
 			break
 		}
-		message <- string(msg)
+		fmt.Println(string(msg))
+		if string(msg) == "exit" {
+			fmt.Println("exitif")
+			exit <- c
+		} else {
+			message <- string(msg)
+		}
 	}
 }
 
 // широковещатель
 func broadcaster() {
-	clients := make([]client, 0)
+	clients := make(map[int]client)
+	//clients := make([]client, 0)
 	for {
 		select {
 		case user := <-entering:
 			//add new user to slice
-			clients = append(clients, user)
+			clients[user.id] = user
 
 			//meeting with the new user
-			user.chanel_in <- "<- hi #" + user.connection.RemoteAddr().String() + "\n"
+			clients[clientCount].chanel_in <- "<- hi #" + clients[clientCount].connection.RemoteAddr().String() + "\n"
 
 			// tell everybody about new user
 			for i := range clients {
@@ -63,7 +71,11 @@ func broadcaster() {
 					clients[i].chanel_in <- msg[1]
 				}
 			}
-		default:
+		case user := <-exit:
+			delete(clients, user.id)
+			clientCount--
+			close(user.chanel_in)
+			user.connection.Close()
 			//fmt.Println("\n case default")
 		}
 	}
@@ -78,7 +90,6 @@ func handler(connection net.Conn) {
 	user.chanel_in <- "-> I connected to: " + connection.LocalAddr().String() + "\n"
 	entering <- user
 
-	fmt.Println("handler run go clientwriter\n")
 }
 
 func main() {
