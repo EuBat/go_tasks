@@ -4,21 +4,39 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
+	"strings"
 )
 
 type client struct {
 	connection net.Conn
-	chanel     chan string
+	chanel_in  chan string // input msg
+	id         int
 }
 
 var (
-	entering = make(chan string)
-	leaving  = make(chan string)
-	message  = make(chan string)
+	clientCount int = 0
+	entering        = make(chan client)
+	message         = make(chan string)
 )
 
-func clientWriter(connection net.Conn, chanel chan string) {
-	fmt.Println("\nfunc client writer")
+// печать входящих сообщений
+func clientWriter(c client) {
+	for {
+		c.connection.Write([]byte(<-c.chanel_in))
+	}
+}
+
+// чтение из консоли исходящих сообщений
+func clientReader(c client) {
+	msg := make([]byte, 80)
+	for {
+		_, err := c.connection.Read(msg)
+		if err != nil {
+			break
+		}
+		message <- string(msg)
+	}
 }
 
 // широковещатель
@@ -26,54 +44,52 @@ func broadcaster() {
 	clients := make([]client, 0)
 	for {
 		select {
-		case msg := <-entering:
-			fmt.Println("\n case entering")
-			clients = append(clients)
-			clients[len(clients)-1].msg_input <- "\nhi #" + clients[len(clients)-1].conn.RemoteAddr().String()
-			fmt.Println(<-clients[len(clients)-1].msg_input)
+		case user := <-entering:
+			//add new user to slice
+			clients = append(clients, user)
 
+			//meeting with the new user
+			user.chanel_in <- "<- hi #" + user.connection.RemoteAddr().String() + "\n"
+
+			// tell everybody about new user
 			for i := range clients {
-				clients[i].msg_input <- "\nnew user"
+				clients[i].chanel_in <- "\n new user " + user.connection.RemoteAddr().String() + " connected\n"
+			}
+		case user_msg := <-message:
+			msg := strings.Split(user_msg, " ")
+			userId, _ := strconv.Atoi(msg[0])
+			for i := range clients {
+				if clients[i].id == userId {
+					clients[i].chanel_in <- msg[1]
+				}
 			}
 		default:
-			fmt.Println("\n case default")
-			for i := range clients {
-				clients[i].msg_input <- "\nnothing"
-			}
+			//fmt.Println("\n case default")
 		}
 	}
 }
 
 func handler(connection net.Conn) {
-	defer connection.Close()
+	clientCount++
+	user := client{connection, make(chan string), clientCount}
 
-	chanel := make(chan string)
+	go clientWriter(user)
+	go clientReader(user)
+	user.chanel_in <- "-> I connected to: " + connection.LocalAddr().String() + "\n"
+	entering <- user
 
-	go clientWriter(connection, chanel)
-
-	chanel <- "I'am " + connection.LocalAddr().String()
-	entering <- client{conneconnection, chanel}
-
-	msg := make([]byte, 80)
-	for {
-		_, err := connection.Read(msg)
-		if err != nil {
-			break
-		}
-		fmt.Println(string(msg))
-	}
-
+	fmt.Println("handler run go clientwriter\n")
 }
 
 func main() {
 	//lister - серверный сокет
-	listener, err := net.Listen("tcp4", "192.168.0.105:1027")
+	//listener, err := net.Listen("tcp4", "192.168.0.105:1027")
+	listener, err := net.Listen("tcp4", "172.20.10.2:1027")
 	if err != nil {
 		log.Fatal(err)
 		fmt.Println("error", err)
 	}
-	fmt.Println(listener)
-	fmt.Println("ok")
+	fmt.Println("server created")
 	go broadcaster()
 	for {
 		connection, err := listener.Accept()
@@ -81,7 +97,7 @@ func main() {
 			fmt.Println("Ошибочка вышла c подключением")
 			log.Fatal(err)
 		}
+		fmt.Println(connection.LocalAddr().String())
 		go handler(connection)
 	}
-
 }
