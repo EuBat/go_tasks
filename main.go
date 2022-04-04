@@ -4,16 +4,56 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 )
 
-var ClientCount int = 0
+type client struct {
+	connection net.Conn
+	chanel     chan string
+}
 
-func Handler(connection net.Conn) {
+var (
+	entering = make(chan string)
+	leaving  = make(chan string)
+	message  = make(chan string)
+)
+
+func clientWriter(connection net.Conn, chanel chan string) {
+	fmt.Println("\nfunc client writer")
+}
+
+// широковещатель
+func broadcaster() {
+	clients := make([]client, 0)
+	for {
+		select {
+		case msg := <-entering:
+			fmt.Println("\n case entering")
+			clients = append(clients)
+			clients[len(clients)-1].msg_input <- "\nhi #" + clients[len(clients)-1].conn.RemoteAddr().String()
+			fmt.Println(<-clients[len(clients)-1].msg_input)
+
+			for i := range clients {
+				clients[i].msg_input <- "\nnew user"
+			}
+		default:
+			fmt.Println("\n case default")
+			for i := range clients {
+				clients[i].msg_input <- "\nnothing"
+			}
+		}
+	}
+}
+
+func handler(connection net.Conn) {
 	defer connection.Close()
-	fmt.Println("\nConnection #", connection)
-	ClientCount++
-	connection.Write([]byte("\nHi! You are #" + strconv.Itoa(ClientCount)))
+
+	chanel := make(chan string)
+
+	go clientWriter(connection, chanel)
+
+	chanel <- "I'am " + connection.LocalAddr().String()
+	entering <- client{conneconnection, chanel}
+
 	msg := make([]byte, 80)
 	for {
 		_, err := connection.Read(msg)
@@ -34,21 +74,14 @@ func main() {
 	}
 	fmt.Println(listener)
 	fmt.Println("ok")
-
-	connection := make([]net.Conn, 0)
+	go broadcaster()
 	for {
-		client, err := listener.Accept()
+		connection, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Ошибочка вышла")
+			fmt.Println("Ошибочка вышла c подключением")
 			log.Fatal(err)
 		}
-		connection = append(connection, client)
-		fmt.Println("\namount connection ", len(connection))
-		go Handler(client)
-		for i := 0; i < len(connection)-1; i++ {
-			fmt.Println("\n i =", i)
-			connection[i].Write([]byte("\nnew client #" + string(ClientCount)))
-		}
+		go handler(connection)
 	}
 
 }
