@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -15,35 +16,49 @@ type client struct {
 }
 
 var (
-	clientCount int = 0
-	entering        = make(chan client)
-	exit            = make(chan client)
-	message         = make(chan string)
+	clientCount    int = 0
+	chanelEntering     = make(chan client)
+	chanelExit         = make(chan client)
+	chanelMessage      = make(chan string)
 )
 
 // печать входящих сообщений
 func clientWriter(c client) {
 	for {
-		c.connection.Write([]byte(<-c.chanel_in))
+		c.connection.Write([]byte(<-c.chanel_in + "\n"))
+
 	}
 }
 
 // чтение из консоли исходящих сообщений
 func clientReader(c client) {
-	msg := make([]byte, 4)
+
+	msg := bufio.NewScanner(c.connection)
 	for {
-		_, err := c.connection.Read(msg)
-		if err != nil {
-			break
-		}
-		fmt.Println(string(msg))
-		if string(msg) == "exit" {
+		msg.Scan()
+
+		if msg.Text() == "exit" {
 			fmt.Println("exitif")
-			exit <- c
+			chanelExit <- c
 		} else {
-			message <- string(msg)
+			chanelMessage <- msg.Text()
 		}
 	}
+
+	// msg := make([]byte, 4)
+	// for {
+	// 	_, err := c.connection.Read(msg)
+	// 	if err != nil {
+	// 		break
+	// 	}
+	// 	fmt.Println(string(msg))
+	// 	if string(msg) == "exit" {
+	// 		fmt.Println("exitif")
+	// 		exit <- c
+	// 	} else {
+	// 		message <- string(msg)
+	// 	}
+	// }
 }
 
 // широковещатель
@@ -52,18 +67,18 @@ func broadcaster() {
 	//clients := make([]client, 0)
 	for {
 		select {
-		case user := <-entering:
+		case user := <-chanelEntering:
 			//add new user to slice
 			clients[user.id] = user
 
 			//meeting with the new user
-			clients[clientCount].chanel_in <- "<- hi #" + clients[clientCount].connection.RemoteAddr().String() + "\n"
+			clients[clientCount].chanel_in <- "<- hi #" + clients[clientCount].connection.RemoteAddr().String()
 
 			// tell everybody about new user
 			for i := range clients {
-				clients[i].chanel_in <- "\n new user " + user.connection.RemoteAddr().String() + " connected\n"
+				clients[i].chanel_in <- "<- new user " + user.connection.RemoteAddr().String() + " connected"
 			}
-		case user_msg := <-message:
+		case user_msg := <-chanelMessage:
 			msg := strings.Split(user_msg, " ")
 			userId, _ := strconv.Atoi(msg[0])
 			for i := range clients {
@@ -71,12 +86,12 @@ func broadcaster() {
 					clients[i].chanel_in <- msg[1]
 				}
 			}
-		case user := <-exit:
+		case user := <-chanelExit:
+			user.chanel_in <- "bye-bye" + user.connection.LocalAddr().String()
 			delete(clients, user.id)
 			clientCount--
 			close(user.chanel_in)
 			user.connection.Close()
-			//fmt.Println("\n case default")
 		}
 	}
 }
@@ -87,15 +102,15 @@ func handler(connection net.Conn) {
 
 	go clientWriter(user)
 	go clientReader(user)
-	user.chanel_in <- "-> I connected to: " + connection.LocalAddr().String() + "\n"
-	entering <- user
+	user.chanel_in <- "-> I connected to: " + connection.LocalAddr().String()
+	chanelEntering <- user
 
 }
 
 func main() {
 	//lister - серверный сокет
-	//listener, err := net.Listen("tcp4", "192.168.0.105:1027")
-	listener, err := net.Listen("tcp4", "172.20.10.2:1027")
+	listener, err := net.Listen("tcp4", "192.168.0.105:1027")
+	//listener, err := net.Listen("tcp4", "172.20.10.2:1027")
 	if err != nil {
 		log.Fatal(err)
 		fmt.Println("error", err)
@@ -108,7 +123,6 @@ func main() {
 			fmt.Println("Ошибочка вышла c подключением")
 			log.Fatal(err)
 		}
-		fmt.Println(connection.LocalAddr().String())
 		go handler(connection)
 	}
 }
