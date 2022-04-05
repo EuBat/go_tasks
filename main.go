@@ -26,17 +26,14 @@ var (
 func clientWriter(c client) {
 	for {
 		c.connection.Write([]byte(<-c.chanel_in + "\n"))
-
 	}
 }
 
 // чтение из консоли исходящих сообщений
 func clientReader(c client) {
-
 	msg := bufio.NewScanner(c.connection)
 	for {
 		msg.Scan()
-
 		if msg.Text() == "exit" {
 			fmt.Println("exitif")
 			chanelExit <- c
@@ -44,27 +41,11 @@ func clientReader(c client) {
 			chanelMessage <- msg.Text()
 		}
 	}
-
-	// msg := make([]byte, 4)
-	// for {
-	// 	_, err := c.connection.Read(msg)
-	// 	if err != nil {
-	// 		break
-	// 	}
-	// 	fmt.Println(string(msg))
-	// 	if string(msg) == "exit" {
-	// 		fmt.Println("exitif")
-	// 		exit <- c
-	// 	} else {
-	// 		message <- string(msg)
-	// 	}
-	// }
 }
 
 // широковещатель
 func broadcaster() {
 	clients := make(map[int]client)
-	//clients := make([]client, 0)
 	for {
 		select {
 		case user := <-chanelEntering:
@@ -89,7 +70,6 @@ func broadcaster() {
 		case user := <-chanelExit:
 			user.chanel_in <- "bye-bye" + user.connection.LocalAddr().String()
 			delete(clients, user.id)
-			clientCount--
 			close(user.chanel_in)
 			user.connection.Close()
 		}
